@@ -1,2 +1,1 @@
-This Bot can Create a Role Button and keep a server member count
-
+This Bot can Create a 2 Role Buttons and keep a server member count in a text channel.

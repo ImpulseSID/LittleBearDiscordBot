@@ -13,9 +13,11 @@ intents = discord.Intents.default()
 intents.members = True
 bot = discord.Bot(intents=intents)
 
+
 @bot.event
 async def on_ready():
     print(f"Bot is online as {bot.user}")
+
 
 # Command to create a message with buttons to assign roles
 @bot.slash_command(name="create_role_buttons", description="Create a role assignment message")
@@ -50,6 +52,7 @@ async def create_role_buttons(ctx, role1: discord.Role, role2: discord.Role):
 
     await ctx.respond(embed=embed, view=RoleView())
 
+
 # Command to set a channel for member count updates
 @bot.slash_command(name="set_member_count", description="Set a channel to display the member count")
 async def set_member_count(ctx, channel: discord.TextChannel):
@@ -67,6 +70,7 @@ async def set_member_count(ctx, channel: discord.TextChannel):
 
     await update_member_count()
     await ctx.respond(f"Member count channel set to {channel.mention}")
+
 
 # Run the bot with the token from the .env file
 bot.run(TOKEN)
