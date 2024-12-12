@@ -58,7 +58,17 @@ async def create_role_buttons(ctx, role1: discord.Role, role2: discord.Role):
 async def set_member_count(ctx, channel: discord.TextChannel):
     async def update_member_count():
         member_count = len(ctx.guild.members)
-        await channel.edit(name=f"Members: {member_count}")
+        message = await fetch_member_count_message(channel)
+        if message:
+            await message.edit(content=f"Member Count: {member_count}")
+        else:
+            await channel.send(content=f"Member Count: {member_count}")
+
+    async def fetch_member_count_message(channel):
+        async for message in channel.history(limit=100):
+            if message.author == bot.user and message.content.startswith("Member Count:"):
+                return message
+        return None
 
     @bot.event
     async def on_member_join(member):
@@ -69,7 +79,7 @@ async def set_member_count(ctx, channel: discord.TextChannel):
         await update_member_count()
 
     await update_member_count()
-    await ctx.respond(f"Member count channel set to {channel.mention}")
+    await ctx.respond(f"Member count updates set to {channel.mention}")
 
 
 # Run the bot with the token from the .env file
