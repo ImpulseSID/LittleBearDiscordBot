@@ -17,11 +17,11 @@ A modern, slash-command-based Discord music bot built with [discord.py](https://
 ---
 
 ## Commands
-
+```sh
 | Command           | Description                              |
-| ----------------- | ---------------------------------------- | --------------------------------- |
+| ----------------- | ---------------------------------------- |
 | `/join [channel]` | Join a voice channel (or user's current) |
-| `/play <query     | url>`                                    | Add a track to the queue and play |
+| `/play <queryurl>`| Add a track to the queue and play        |
 | `/pause`          | Pause playback                           |
 | `/resume`         | Resume playback                          |
 | `/skip`           | Skip the current track                   |
@@ -35,7 +35,7 @@ A modern, slash-command-based Discord music bot built with [discord.py](https://
 | `/ping`           | Ping the bot                             |
 | `/about`          | About this bot                           |
 | `/help`           | Show help                                |
-
+```
 ---
 
 ## Setup & Installation
