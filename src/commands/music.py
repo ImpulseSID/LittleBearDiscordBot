@@ -1,163 +1,29 @@
-import asyncio
 import random
-from dataclasses import dataclass
-from typing import Optional, Deque, Dict, Any, List
-from collections import deque
-
 import discord
 from discord import app_commands
 from discord.ext import commands
-
+from typing import Optional, Dict
+from utils.player import Track, GuildPlayer
 from config import FFMPEG_BEFORE_OPTS, FFMPEG_OPTIONS
 from utils.yt_dlp_handler import extract_info
 
-@dataclass
-class Track:
-    title: str
-    stream_url: str
-    webpage_url: str
-    duration: Optional[int]
-    requester_id: int
-
-class GuildPlayer:
-    def __init__(self, bot: commands.Bot, guild_id: int):
-        self.bot = bot
-        self.guild_id = guild_id
-        self.queue: Deque[Track] = deque()
-        self.current: Optional[Track] = None
-        self.play_next = asyncio.Event()
-        self.voice: Optional[discord.VoiceClient] = None
-        self.lock = asyncio.Lock()
-        self.player_task: Optional[asyncio.Task] = None
-
-    def _after(self, error: Optional[Exception]):
-        print(f"[GuildPlayer._after] Called with error: {error}")
-        if error:
-            print(f"[GuildPlayer._after] Error: {error}")
-        self.bot.loop.call_soon_threadsafe(self.play_next.set)
-
-    async def ensure_task(self):
-        print(f"[GuildPlayer.ensure_task] Called. player_task: {self.player_task}")
-        if self.player_task is None or self.player_task.done():
-            print("[GuildPlayer.ensure_task] Creating new player_loop task.")
-            self.player_task = self.bot.loop.create_task(self.player_loop())
-
-    async def player_loop(self):
-        print("[GuildPlayer.player_loop] Started.")
-        while True:
-            self.play_next.clear()
-            print(f"[GuildPlayer.player_loop] Queue: {list(self.queue)}")
-            if not self.queue:
-                try:
-                    print("[GuildPlayer.player_loop] Waiting for next track or timeout.")
-                    await asyncio.wait_for(self.play_next.wait(), timeout=300)
-                    print("[GuildPlayer.player_loop] play_next event set.")
-                    continue
-                except asyncio.TimeoutError:
-                    print("[GuildPlayer.player_loop] Timeout reached, disconnecting.")
-                    if self.voice and self.voice.is_connected():
-                        await self.voice.disconnect(force=True)
-                    self.current = None
-                    return
-            self.current = self.queue.popleft()
-            print(f"[GuildPlayer.player_loop] Now playing: {self.current}")
-            if not self.voice or not self.voice.is_connected():
-                print("[GuildPlayer.player_loop] Not connected to voice, skipping track.")
-                self.current = None
-                continue
-            try:
-                source = discord.FFmpegPCMAudio(self.current.stream_url, before_options=FFMPEG_BEFORE_OPTS, options=FFMPEG_OPTIONS)
-                self.voice.play(source, after=self._after)
-                print(f"[GuildPlayer.player_loop] Started playback: {self.current.title}")
-            except Exception as e:
-                print(f"[GuildPlayer.player_loop] Error starting playback: {e}")
-            await self.play_next.wait()
-            print("[GuildPlayer.player_loop] Track ended or skipped.")
-            # If queue is empty after playback, leave the voice channel
-            if not self.queue:
-                if self.voice and self.voice.is_connected():
-                    await self.voice.disconnect(force=True)
-                    print("[GuildPlayer.player_loop] Disconnected from voice after queue ended.")
-                self.current = None
-                return
-
-    async def join(self, channel: discord.VoiceChannel):
-        print(f"[GuildPlayer.join] Called with channel: {channel}")
-        try:
-            if self.voice and self.voice.channel == channel:
-                print("[GuildPlayer.join] Already in target channel.")
-                return
-            if self.voice and self.voice.is_connected():
-                print(f"[GuildPlayer.join] Moving to channel: {channel}")
-                await self.voice.move_to(channel)
-            else:
-                print(f"[GuildPlayer.join] Connecting to channel: {channel}")
-                self.voice = await channel.connect()
-        except Exception as e:
-            print(f"[GuildPlayer.join] Exception: {e}")
-            raise
-
-    async def add(self, track: Track):
-        print(f"[GuildPlayer.add] Adding track: {track}")
-        self.queue.append(track)
-        await self.ensure_task()
-
-    async def skip(self) -> bool:
-        print("[GuildPlayer.skip] Called.")
-        if self.voice and self.voice.is_playing():
-            print("[GuildPlayer.skip] Stopping current track.")
-            self.voice.stop()
-            return True
-        print("[GuildPlayer.skip] Nothing is playing.")
-        return False
-
-    async def stop(self):
-        print("[GuildPlayer.stop] Called. Clearing queue and stopping playback.")
-        self.queue.clear()
-        if self.voice and self.voice.is_playing():
-            self.voice.stop()
-        self.current = None
-
-    async def pause(self) -> bool:
-        print("[GuildPlayer.pause] Called.")
-        if self.voice and self.voice.is_playing():
-            print("[GuildPlayer.pause] Pausing playback.")
-            self.voice.pause()
-            return True
-        print("[GuildPlayer.pause] Nothing is playing.")
-        return False
-
-    async def resume(self) -> bool:
-        print("[GuildPlayer.resume] Called.")
-        if self.voice and self.voice.is_paused():
-            print("[GuildPlayer.resume] Resuming playback.")
-            self.voice.resume()
-            return True
-        print("[GuildPlayer.resume] Nothing is paused.")
-        return False
 
 class Music(commands.Cog):
 
-    @app_commands.command(name="playlist", description="Play and queue all tracks from a YouTube playlist URL")
+    @app_commands.command(name="playlist", description="Play and queue all tracks from a YouTube playlist URL (true lazy loading)")
     async def playlist(self, interaction: discord.Interaction, url: str):
         print(f"[Music.playlist] Called by user: {interaction.user} with url: {url}")
         if not interaction.guild:
-            await interaction.response.send_message("Guild only.")
-            print("[Music.playlist] Not in a guild.")
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
             return
         player = self.get_player(interaction.guild)
         user_vc = getattr(getattr(interaction.user, "voice", None), "channel", None)
         print(f"[Music.playlist] user_vc: {user_vc}")
         if not player.voice or not player.voice.is_connected():
-            if not user_vc:
-                await interaction.response.send_message("Join a voice channel first or use /join.")
-                print("[Music.playlist] User not in a voice channel.")
-                return
-            try:
+            if user_vc:
                 await player.join(user_vc)
-            except Exception as e:
-                await interaction.response.send_message(f"Failed to join VC: {e}")
-                print(f"[Music.playlist] Exception joining VC: {e}")
+            else:
+                await interaction.response.send_message("You must be in a voice channel or specify one.", ephemeral=True)
                 return
         await interaction.response.defer()
         from utils.yt_dlp_handler import extract_playlist
@@ -167,26 +33,45 @@ class Music(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"Failed to extract playlist: {e}")
             print(f"[Music.playlist] Exception extracting playlist: {e}")
+            if player.voice and player.voice.is_connected():
+                await player.voice.disconnect(force=True)
             return
-        if not tracks:
+        if not tracks or len(tracks) == 0:
             await interaction.followup.send("No tracks found in playlist.")
             print("[Music.playlist] No tracks found in playlist.")
+            if player.voice and player.voice.is_connected():
+                await player.voice.disconnect(force=True)
             return
-        added_titles = []
-        for info in tracks:
-            track = Track(
-                title=info["title"],
-                stream_url=info["url"],
-                webpage_url=info["webpage_url"],
-                duration=info.get("duration"),
-                requester_id=interaction.user.id,
-            )
-            await player.add(track)
-            added_titles.append(track.title)
+        # Only queue the first track, store the rest for lazy loading
+        first_track_info = None
+        rest_urls = []
+        for idx, info in enumerate(tracks):
+            if info.get("url") and info.get("title"):
+                if not first_track_info:
+                    first_track_info = info
+                else:
+                    rest_urls.append(info["webpage_url"])
+        if not first_track_info:
+            await interaction.followup.send("No playable tracks found in playlist.")
+            print("[Music.playlist] No playable tracks after filtering.")
+            if player.voice and player.voice.is_connected():
+                await player.voice.disconnect(force=True)
+            return
+        track = Track(
+            title=first_track_info["title"],
+            stream_url=first_track_info["url"],
+            webpage_url=first_track_info["webpage_url"],
+            duration=first_track_info.get("duration"),
+            requester_id=interaction.user.id,
+        )
+        await player.add(track)
+        player.lazy_playlist_urls = rest_urls
+        player.lazy_playlist_requester = interaction.user.id
         if player.current is None and (not player.voice or not player.voice.is_playing()):
             player.play_next.set()
-        await interaction.followup.send(f"Queued {len(added_titles)} tracks from playlist.")
-        print(f"[Music.playlist] Queued {len(added_titles)} tracks from playlist.")
+        msg = f"Queued: [{track.title}]({track.webpage_url}) from playlist. Remaining tracks will load as each finishes."
+        await interaction.followup.send(msg)
+        print(f"[Music.playlist] {msg}")
     def __init__(self, bot: commands.Bot):
         print("[Music.__init__] Initializing Music cog.")
         self.bot = bot

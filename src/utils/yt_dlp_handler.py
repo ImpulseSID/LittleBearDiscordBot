@@ -30,17 +30,41 @@ def _extract_playlist_sync(playlist_url: str) -> list:
         "default_search": YDL_DEFAULT_SEARCH,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(playlist_url, download=False)
-        entries = info["entries"] if "entries" in info else []
         tracks = []
-        for entry in entries:
+        try:
+            info = ydl.extract_info(playlist_url, download=False)
+            entries = info["entries"] if "entries" in info else []
+        except Exception as e:
+            print(f"[yt_dlp_handler] Playlist extraction failed: {e}. Attempting to extract entries individually.")
+            # Try to get video IDs from the playlist URL (best effort)
+            import re
+            playlist_id_match = re.search(r'list=([\w-]+)', playlist_url)
+            playlist_id = playlist_id_match.group(1) if playlist_id_match else None
+            if not playlist_id:
+                return []
+            # Try to fetch video IDs using yt-dlp (best effort)
+            try:
+                info = ydl.extract_info(f"https://www.youtube.com/playlist?list={playlist_id}", download=False)
+                entries = info["entries"] if "entries" in info else []
+            except Exception as e2:
+                print(f"[yt_dlp_handler] Could not extract entries even with fallback: {e2}")
+                return []
+        for idx, entry in enumerate(entries):
             if not entry:
                 continue
-            url = entry.get("url")
-            title = entry.get("title") or "Unknown"
-            webpage_url = entry.get("webpage_url") or playlist_url
-            duration = entry.get("duration")
-            tracks.append({"url": url, "title": title, "webpage_url": webpage_url, "duration": duration})
+            try:
+                # Some entries may be a dict with 'ie_key' and 'url' only, need to extract more info
+                if entry.get('_type') == 'url' and 'url' in entry:
+                    # Try to extract info for this entry
+                    entry = ydl.extract_info(entry['url'], download=False)
+                url = entry.get("url")
+                title = entry.get("title") or "Unknown"
+                webpage_url = entry.get("webpage_url") or playlist_url
+                duration = entry.get("duration")
+                tracks.append({"url": url, "title": title, "webpage_url": webpage_url, "duration": duration})
+            except Exception as entry_err:
+                print(f"[yt_dlp_handler] Skipping entry {idx} due to error: {entry_err}")
+                continue
         return tracks
 
 
