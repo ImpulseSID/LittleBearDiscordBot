@@ -12,30 +12,65 @@ class General(commands.Cog):
 
     @app_commands.command(name="about", description="About this bot")
     async def about(self, interaction: discord.Interaction):
-        embed = discord.Embed(title="Discord Music Bot", description="Slash-command music bot using yt-dlp and ffmpeg.")
-        embed.add_field(name="Commands", value="/join /play /pause /resume /skip /stop /queue /nowplaying /shuffle /clear /remove /leave /ping /help", inline=False)
+        embed = discord.Embed(
+            title="Little Bear Discord Music Bot",
+            description="A modern, open-source Discord music bot built with discord.py, yt-dlp, and FFmpeg. Supports YouTube playlists, queueing, and more.",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="Developer",
+            value="ImpulseSID (https://github.com/ImpulseSID)",
+            inline=False
+        )
+        embed.add_field(
+            name="Features",
+            value=(
+                "- Slash commands for all music controls\n"
+                "- Play music from YouTube (single tracks & playlists)\n"
+                "- Queue, shuffle, skip, and remove tracks\n"
+                "- Automatic disconnect when idle\n"
+                "- Open source and easy to self-host"
+            ),
+            inline=False
+        )
+        embed.add_field(
+            name="Source Code",
+            value="https://github.com/ImpulseSID/LittleBearDiscordBot",
+            inline=False
+        )
+        embed.set_footer(text="Made with ❤️ by ImpulseSID")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="help", description="Show help")
     async def help(self, interaction: discord.Interaction):
-        text = (
-            "**Music**\n"
-            "/join [channel] — Join a voice channel\n"
-            "/play <query|url> — Add a track to the queue and play\n"
-            "/pause — Pause\n"
-            "/resume — Resume\n"
-            "/skip — Skip current\n"
-            "/stop — Stop and clear queue\n"
-            "/queue — Show queue\n"
-            "/nowplaying — Show current track\n"
-            "/shuffle — Shuffle the queue\n"
-            "/clear — Clear the queue\n"
-            "/remove <index> — Remove item from queue (1-based)\n"
-            "/leave — Leave voice channel\n\n"
-            "**General**\n"
-            "/ping, /about, /help"
+        embed = discord.Embed(title="Little Bear Music Bot Help", color=discord.Color.blurple())
+        embed.add_field(
+            name="Music Commands",
+            value=(
+                "/join [channel] — Join a voice channel\n"
+                "/play <url> — Play a single YouTube video or audio URL\n"
+                "/queueadd <url> — Add a single YouTube video or audio URL to the queue\n"
+                "/playlist <url> — Queue all tracks from a YouTube playlist URL\n"
+                "/pause — Pause playback\n"
+                "/resume — Resume playback\n"
+                "/skip — Skip current track\n"
+                "/stop — Stop and clear the queue\n"
+                "/queue — Show the current queue\n"
+                "/nowplaying — Show the currently playing track\n"
+                "/shuffle — Shuffle the queue\n"
+                "/clear — Clear the queue\n"
+                "/remove <index> — Remove item from queue (1-based)\n"
+                "/leave — Leave the voice channel"
+            ),
+            inline=False
         )
-        await interaction.response.send_message(text)
+        embed.add_field(
+            name="General Commands",
+            value="/ping — Ping the bot\n/about — About this bot\n/help — Show help",
+            inline=False
+        )
+        embed.set_footer(text="Made with ❤️ by ImpulseSID")
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(General(bot))

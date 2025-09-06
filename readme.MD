@@ -20,21 +20,21 @@ A modern, slash-command-based Discord music bot built with [discord.py](https://
 ```sh
 | Command           | Description                              |
 | ----------------- | ---------------------------------------- |
-| `/join [channel]` | Join a voice channel (or user's current) |
-| `/play <queryurl>`| Add a track to the queue and play        |
-| `/pause`          | Pause playback                           |
-| `/resume`         | Resume playback                          |
-| `/skip`           | Skip the current track                   |
-| `/stop`           | Stop and clear the queue                 |
-| `/queue`          | Show the current queue                   |
-| `/nowplaying`     | Show the currently playing track         |
-| `/shuffle`        | Shuffle the queue                        |
-| `/clear`          | Clear the queue                          |
-| `/remove <index>` | Remove item from queue (1-based)         |
-| `/leave`          | Leave the voice channel                  |
-| `/ping`           | Ping the bot                             |
-| `/about`          | About this bot                           |
-| `/help`           | Show help                                |
+| /join [channel]   | Join a voice channel (or users current) |
+| /play <queryurl>  | Add a track to the queue and play        |
+| /pause            | Pause playback                           |
+| /resume           | Resume playback                          |
+| /skip             | Skip the current track                   |
+| /stop             | Stop and clear the queue                 |
+| /queue            | Show the current queue                   |
+| /nowplaying       | Show the currently playing track         |
+| /shuffle          | Shuffle the queue                        |
+| /clear            | Clear the queue                          |
+| /remove <index>   | Remove item from queue (1-based)         |
+| /leave            | Leave the voice channel                  |
+| /ping             | Ping the bot                             |
+| /about            | About this bot                           |
+| /help             | Show help                                |
 ```
 ---
 

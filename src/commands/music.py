@@ -73,6 +73,13 @@ class GuildPlayer:
                 print(f"[GuildPlayer.player_loop] Error starting playback: {e}")
             await self.play_next.wait()
             print("[GuildPlayer.player_loop] Track ended or skipped.")
+            # If queue is empty after playback, leave the voice channel
+            if not self.queue:
+                if self.voice and self.voice.is_connected():
+                    await self.voice.disconnect(force=True)
+                    print("[GuildPlayer.player_loop] Disconnected from voice after queue ended.")
+                self.current = None
+                return
 
     async def join(self, channel: discord.VoiceChannel):
         print(f"[GuildPlayer.join] Called with channel: {channel}")
@@ -130,6 +137,56 @@ class GuildPlayer:
         return False
 
 class Music(commands.Cog):
+
+    @app_commands.command(name="playlist", description="Play and queue all tracks from a YouTube playlist URL")
+    async def playlist(self, interaction: discord.Interaction, url: str):
+        print(f"[Music.playlist] Called by user: {interaction.user} with url: {url}")
+        if not interaction.guild:
+            await interaction.response.send_message("Guild only.")
+            print("[Music.playlist] Not in a guild.")
+            return
+        player = self.get_player(interaction.guild)
+        user_vc = getattr(getattr(interaction.user, "voice", None), "channel", None)
+        print(f"[Music.playlist] user_vc: {user_vc}")
+        if not player.voice or not player.voice.is_connected():
+            if not user_vc:
+                await interaction.response.send_message("Join a voice channel first or use /join.")
+                print("[Music.playlist] User not in a voice channel.")
+                return
+            try:
+                await player.join(user_vc)
+            except Exception as e:
+                await interaction.response.send_message(f"Failed to join VC: {e}")
+                print(f"[Music.playlist] Exception joining VC: {e}")
+                return
+        await interaction.response.defer()
+        from utils.yt_dlp_handler import extract_playlist
+        try:
+            tracks = await extract_playlist(url)
+            print(f"[Music.playlist] Extracted {len(tracks)} tracks from playlist.")
+        except Exception as e:
+            await interaction.followup.send(f"Failed to extract playlist: {e}")
+            print(f"[Music.playlist] Exception extracting playlist: {e}")
+            return
+        if not tracks:
+            await interaction.followup.send("No tracks found in playlist.")
+            print("[Music.playlist] No tracks found in playlist.")
+            return
+        added_titles = []
+        for info in tracks:
+            track = Track(
+                title=info["title"],
+                stream_url=info["url"],
+                webpage_url=info["webpage_url"],
+                duration=info.get("duration"),
+                requester_id=interaction.user.id,
+            )
+            await player.add(track)
+            added_titles.append(track.title)
+        if player.current is None and (not player.voice or not player.voice.is_playing()):
+            player.play_next.set()
+        await interaction.followup.send(f"Queued {len(added_titles)} tracks from playlist.")
+        print(f"[Music.playlist] Queued {len(added_titles)} tracks from playlist.")
     def __init__(self, bot: commands.Bot):
         print("[Music.__init__] Initializing Music cog.")
         self.bot = bot
@@ -143,6 +200,46 @@ class Music(commands.Cog):
             player = GuildPlayer(self.bot, guild.id)
             self.players[guild.id] = player
         return player
+
+    @app_commands.command(name="queueadd", description="Add a track to the queue by URL without interrupting playback")
+    async def queueadd(self, interaction: discord.Interaction, url: str):
+        print(f"[Music.queueadd] Called by user: {interaction.user} with url: {url}")
+        if not interaction.guild:
+            await interaction.response.send_message("Guild only.")
+            print("[Music.queueadd] Not in a guild.")
+            return
+        player = self.get_player(interaction.guild)
+        user_vc = getattr(getattr(interaction.user, "voice", None), "channel", None)
+        print(f"[Music.queueadd] user_vc: {user_vc}")
+        if not player.voice or not player.voice.is_connected():
+            if not user_vc:
+                await interaction.response.send_message("Join a voice channel first or use /join.")
+                print("[Music.queueadd] User not in a voice channel.")
+                return
+            try:
+                await player.join(user_vc)
+            except Exception as e:
+                await interaction.response.send_message(f"Failed to join VC: {e}")
+                print(f"[Music.queueadd] Exception joining VC: {e}")
+                return
+        await interaction.response.defer()
+        try:
+            info = await extract_info(url)
+            print(f"[Music.queueadd] Extracted info: {info}")
+        except Exception as e:
+            await interaction.followup.send(f"Failed to extract info: {e}")
+            print(f"[Music.queueadd] Exception extracting info: {e}")
+            return
+        track = Track(
+            title=info["title"],
+            stream_url=info["url"],
+            webpage_url=info["webpage_url"],
+            duration=info.get("duration"),
+            requester_id=interaction.user.id,
+        )
+        await player.add(track)
+        await interaction.followup.send(f"Queued: [{track.title}]({track.webpage_url})")
+        print(f"[Music.queueadd] Queued: {track.title}")
 
     @app_commands.command(name="join", description="Join a voice channel")
     async def join(self, interaction: discord.Interaction, channel: Optional[discord.VoiceChannel] = None):
@@ -158,21 +255,21 @@ class Music(commands.Cog):
         print(f"[Music.join] user_vc: {user_vc}, channel param: {channel}")
         target = channel or user_vc
         if not target:
-            await interaction.response.send_message("Join a voice channel or specify one.")
+            await interaction.followup.send("Join a voice channel or specify one.")
             print("[Music.join] No target channel found.")
             return
         player = self.get_player(interaction.guild)
         try:
             await player.join(target)
-            await interaction.response.send_message(f"Joined {target.name}")
+            await interaction.followup.send(f"Joined {target.name}")
             print(f"[Music.join] Joined {target.name}")
         except Exception as e:
-            await interaction.response.send_message(f"Failed to join: {e}")
+            await interaction.followup.send(f"Failed to join: {e}")
             print(f"[Music.join] Exception: {e}")
 
-    @app_commands.command(name="play", description="Play a track or add to queue")
-    async def play(self, interaction: discord.Interaction, query: str):
-        print(f"[Music.play] Called by user: {interaction.user} with query: {query}")
+    @app_commands.command(name="play", description="Play a track by URL or add to queue")
+    async def play(self, interaction: discord.Interaction, url: str):
+        print(f"[Music.play] Called by user: {interaction.user} with url: {url}")
         if not interaction.guild:
             await interaction.response.send_message("Guild only.")
             print("[Music.play] Not in a guild.")
@@ -193,7 +290,7 @@ class Music(commands.Cog):
                 return
         await interaction.response.defer()
         try:
-            info = await extract_info(query)
+            info = await extract_info(url)
             print(f"[Music.play] Extracted info: {info}")
         except Exception as e:
             await interaction.followup.send(f"Failed to extract info: {e}")
